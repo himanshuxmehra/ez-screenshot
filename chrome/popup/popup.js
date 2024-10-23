@@ -1,71 +1,67 @@
-document.addEventListener('DOMContentLoaded', function() {
-    const screenshotImg = document.getElementById('screenshot');
-    const statusDiv = document.getElementById('status');
-    const copyButton = document.getElementById('copyButton');
-    const newTabButton = document.getElementById('newTabButton');
-    const shareButton = document.querySelector('.button-container .button-below:last-child');
-    let imageBlob = null;
-    let imageUrl = null;
-
-    chrome.runtime.sendMessage({action: "getScreenshot"}, function(response) {
-        if (response && response.dataUrl) {
-            screenshotImg.src = response.dataUrl;
-            imageUrl = response.dataUrl;
-            statusDiv.textContent = "Screenshot captured!";
-            copyButton.disabled = false;
-            newTabButton.disabled = false;
-            shareButton.disabled = false;
-            
-            // Convert data URL to Blob
-            fetch(response.dataUrl)
-                .then(res => res.blob())
-                .then(blob => {
-                    imageBlob = blob;
-                });
-        } else {
-            statusDiv.textContent = "Failed to capture screenshot.";
-        }
+document.addEventListener("DOMContentLoaded", async () => {
+    const img = document.getElementById("screenshot");
+    const controls = document.getElementById("controls");
+    const captureBtn = document.getElementById("capture-btn");
+  
+    chrome.storage.local.get("screenshot", ({ screenshot }) => {
+      if (screenshot) {
+        img.src = screenshot;
+        img.style.display = "block";
+        controls.style.display = "flex";
+        captureBtn.style.display = "none";
+      } else {
+        captureBtn.style.display = "block";
+      }
     });
-
-    copyButton.addEventListener('click', function() {
-        if (imageBlob) {
-            navigator.clipboard.write([
-                new ClipboardItem({
-                    'image/png': imageBlob
-                })
-            ]).then(function() {
-                statusDiv.textContent = "Image copied to clipboard!";
-            }, function(error) {
-                console.error("Unable to copy image to clipboard:", error);
-                statusDiv.textContent = "Failed to copy image to clipboard.";
-            });
-        }
+  
+    // Capture screenshot when no screenshot is present
+    captureBtn.addEventListener("click", async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" }, (dataUrl) => {
+        chrome.storage.local.set({ screenshot: dataUrl });
+        img.src = dataUrl;
+        img.style.display = "block";
+        controls.style.display = "flex";
+        captureBtn.style.display = "none";
+      });
     });
-
-    newTabButton.addEventListener('click', function() {
-        if (imageUrl) {
-            chrome.tabs.create({ url: imageUrl });
-        }
+  
+    document.getElementById("save-btn").addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = img.src;
+      a.download = "screenshot.png";
+      a.click();
     });
-
-    shareButton.addEventListener('click', function() {
-        // tbd
-        // if (imageBlob) {
-        //     const file = new File([imageBlob], 'screenshot.png', { type: 'image/png' });
-        //     const shareData = {
-        //         files: [file],
-        //     };
-            
-        //     if (navigator.canShare && navigator.canShare(shareData)) {
-        //         navigator.share(shareData)
-        //             .then(() => statusDiv.textContent = "Screenshot shared successfully!")
-        //             .catch((error) => {
-        //                 console.error("Error sharing screenshot:", error);
-        //                 statusDiv.textContent = "Failed to share screenshot.";
-        //             });
-        //     } else {
-        //         statusDiv.textContent = "Sharing is not supported on this device or browser.";
-        //     }
-        // }
+  
+    document.getElementById("share-btn").addEventListener("click", async () => {
+      // if (navigator.canShare && navigator.canShare({ files: [new File([img.src], "screenshot.png")] })) {
+      //   await navigator.share({ files: [new File([img.src], "screenshot.png")] });
+      // }
+      console.log("share");
     });
-});
+  
+    document.getElementById("copy-btn").addEventListener("click", async () => {
+      try {
+        const response = await fetch(img.src);
+        const blob = await response.blob();
+        const clipboardItem = new ClipboardItem({ "image/png": blob });
+        await navigator.clipboard.write([clipboardItem]);
+        // alert("Image copied to clipboard");
+      } catch (error) {
+        console.error("Error copying image:", error);
+      }
+    });
+  
+    document.getElementById("delete-btn").addEventListener("click", () => {
+      img.src = "";
+      chrome.storage.local.remove("screenshot");
+      img.style.display = "none";
+      controls.style.display = "none";
+      captureBtn.style.display = "block";
+    });
+  
+    document.getElementById("open-tab-btn").addEventListener("click", () => {
+      chrome.tabs.create({ url: img.src });
+    });
+  });
+  
